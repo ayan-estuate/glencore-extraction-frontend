@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Hexagon,
   LayoutDashboard,
   UploadCloud,
   FolderKanban,
@@ -15,6 +14,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../../lib/utils";
 import { useAppStore } from "../../stores/useAppStore";
+import appLogo from "../../assets/logos/logo-glencore.svg";
 
 export type NavTab =
   | "dashboard"
@@ -100,22 +100,30 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
           >
             {!collapsed || isMobileOpen ? (
               <>
-                <div className="flex items-center gap-2.5 overflow-hidden">
-                  {/* Modern Slate Logo */}
-                  <div className="w-8 h-8 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shadow-xs shrink-0">
-                    <Hexagon className="w-5 h-5 fill-current/20 stroke-[2.5]" />
-                  </div>
-                  <div className="flex flex-col truncate">
-                    <span className="font-bold text-sm text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab("dashboard")}
+                  className="flex items-center gap-2.5 overflow-hidden text-left cursor-pointer group focus:outline-none min-w-0"
+                  title="Glencore - DocExtract AI"
+                >
+                  {/* Glencore SVG Brand Logo */}
+                  <img
+                    src={appLogo}
+                    alt="Glencore Logo"
+                    className="h-6 w-auto object-contain shrink-0 group-hover:scale-105 transition-transform"
+                  />
+                  <div className="flex flex-col truncate border-l border-slate-200 dark:border-slate-800 pl-2.5">
+                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100 tracking-tight leading-tight group-hover:text-[#C8102E] transition-colors">
                       DocExtract AI
                     </span>
                     <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-wide">
                       Intelligent Compliance
                     </span>
                   </div>
-                </div>
+                </button>
 
                 <button
+                  type="button"
                   onClick={() => setCollapsed(true)}
                   className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                   title="Collapse sidebar"
@@ -125,12 +133,17 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
               </>
             ) : (
               <button
+                type="button"
                 onClick={() => setCollapsed(false)}
-                className="w-9 h-9 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shadow-xs group relative cursor-pointer transition-all hover:bg-slate-800 dark:hover:bg-slate-200"
+                className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-2xs group relative cursor-pointer transition-all ring-1 ring-slate-200/80 dark:ring-slate-700/80 hover:ring-[#C8102E]/60 p-1.5 bg-white dark:bg-slate-800"
                 title="Expand sidebar"
               >
-                <Hexagon className="w-5 h-5 fill-current/20 stroke-[2.5] transition-opacity group-hover:opacity-0" />
-                <ChevronRight className="w-5 h-5 absolute inset-0 m-auto opacity-0 group-hover:opacity-100 transition-opacity stroke-[2.5]" />
+                <img
+                  src={appLogo}
+                  alt="Glencore"
+                  className="w-full h-auto object-contain transition-transform duration-200 group-hover:scale-110 group-hover:opacity-20"
+                />
+                <ChevronRight className="w-5 h-5 absolute inset-0 m-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-800 dark:text-slate-100 stroke-[2.5]" />
               </button>
             )}
           </div>

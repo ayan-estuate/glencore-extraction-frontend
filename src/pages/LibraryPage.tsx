@@ -37,6 +37,7 @@ import { formatDate, formatBytes } from "../lib/utils";
 import { apiExportJob } from "../lib/apiClient";
 import { useNavigate } from "react-router-dom";
 import { FilterPopover, FilterSelectField } from "../components/common/FilterPopover";
+import { RowActionsMenu } from "../components/common/RowActionsMenu";
 
 export interface LibraryPageProps {
   onSelectDocument?: (doc: StoredDocument) => void;
@@ -141,6 +142,7 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
 
   // Modals & Menu Popovers
   const [activeRowMenu, setActiveRowMenu] = useState<string | null>(null);
+  const rowMenuTriggerRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [docToDelete, setDocToDelete] = useState<StoredDocument | null>(null);
   const [inspectedJob, setInspectedJob] = useState<JobSummary | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -153,14 +155,6 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
     fetchJobs();
   }, [fetchJobs]);
 
-  // Click outside to close row menu
-  useEffect(() => {
-    const handleGlobalClick = () => {
-      setActiveRowMenu(null);
-    };
-    window.addEventListener("click", handleGlobalClick);
-    return () => window.removeEventListener("click", handleGlobalClick);
-  }, []);
 
   const handleSelectDoc = (doc: StoredDocument) => {
     if (onSelectDocument) onSelectDocument(doc);
@@ -732,8 +726,12 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
                         </td>
 
                         {/* Actions 3-dots Menu */}
-                        <td className="py-4 pr-4 pl-2 text-right relative" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-4 pr-4 pl-2 text-right" onClick={(e) => e.stopPropagation()}>
                           <button
+                            ref={(el) => {
+                              if (el) rowMenuTriggerRefs.current.set(doc.id, el);
+                              else rowMenuTriggerRefs.current.delete(doc.id);
+                            }}
                             onClick={() => setActiveRowMenu(activeRowMenu === doc.id ? null : doc.id)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                             title="Actions"
@@ -741,62 +739,64 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
-                          {/* Popover Dropdown */}
-                          {activeRowMenu === doc.id && (
-                            <div className="absolute right-4 top-12 z-30 w-48 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl py-1 text-left text-xs animate-in fade-in zoom-in-95 duration-100">
-                              <button
-                                onClick={() => {
-                                  setActiveRowMenu(null);
-                                  handleSelectDoc(doc);
-                                }}
-                                className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-blue-500" />
-                                <span>View Obligations</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveRowMenu(null);
-                                  handleExportDoc(doc, "DOCX");
-                                }}
-                                className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                              >
-                                <Download className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>Export as DOCX</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveRowMenu(null);
-                                  handleExportDoc(doc, "XLSX");
-                                }}
-                                className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                              >
-                                <Download className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>Export as XLSX</span>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveRowMenu(null);
-                                  handleExportDoc(doc, "PDF");
-                                }}
-                                className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
-                              >
-                                <Download className="w-3.5 h-3.5 text-rose-500" />
-                                <span>Export as PDF</span>
-                              </button>
-                              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                              <button
-                                onClick={() => {
-                                  setActiveRowMenu(null);
-                                  setDocToDelete(doc);
-                                }}
-                                className="w-full px-3.5 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Delete Document</span>
-                              </button>
-                            </div>
-                          )}
+                          {/* Popover Dropdown (portal-rendered so it can't be clipped by the scrollable table) */}
+                          <RowActionsMenu
+                            isOpen={activeRowMenu === doc.id}
+                            onClose={() => setActiveRowMenu(null)}
+                            anchorEl={rowMenuTriggerRefs.current.get(doc.id) ?? null}
+                          >
+                            <button
+                              onClick={() => {
+                                setActiveRowMenu(null);
+                                handleSelectDoc(doc);
+                              }}
+                              className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-blue-500" />
+                              <span>View Obligations</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveRowMenu(null);
+                                handleExportDoc(doc, "DOCX");
+                              }}
+                              className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>Export as DOCX</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveRowMenu(null);
+                                handleExportDoc(doc, "XLSX");
+                              }}
+                              className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>Export as XLSX</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveRowMenu(null);
+                                handleExportDoc(doc, "PDF");
+                              }}
+                              className="w-full px-3.5 py-2 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5 text-rose-500" />
+                              <span>Export as PDF</span>
+                            </button>
+                            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                            <button
+                              onClick={() => {
+                                setActiveRowMenu(null);
+                                setDocToDelete(doc);
+                              }}
+                              className="w-full px-3.5 py-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete Document</span>
+                            </button>
+                          </RowActionsMenu>
                         </td>
                       </tr>
                     );

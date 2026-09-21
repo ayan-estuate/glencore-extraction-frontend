@@ -89,7 +89,8 @@ export function ComplianceOverviewTrend() {
     return points;
   }, [allDocuments]);
 
-  const scoreFraction = Math.max(0, Math.min(1, stats.complianceScore / 100));
+  const hasObligations = stats.totalObligations > 0;
+  const scoreFraction = hasObligations ? Math.max(0, Math.min(1, stats.complianceScore / 100)) : 0;
 
   return (
     <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4">
@@ -237,16 +238,22 @@ export function ComplianceOverviewTrend() {
 
             <div className="absolute bottom-0 flex flex-col items-center">
               <span className="text-2xl font-black font-mono text-slate-900 dark:text-slate-100 leading-none">
-                {stats.complianceScore}%
+                {hasObligations ? `${stats.complianceScore}%` : "—"}
               </span>
               <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">Overall Score</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-2">
-            <ArrowUpRight className="w-3.5 h-3.5" />
-            <span>Real-time Compliance Metric</span>
-          </div>
+          {hasObligations ? (
+            <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-2">
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>Real-time Compliance Metric</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 mt-2">
+              <span>No obligations extracted yet</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

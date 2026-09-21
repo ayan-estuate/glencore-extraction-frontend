@@ -6,6 +6,7 @@ import { NotificationsPopover } from "../common/NotificationsPopover";
 import { useComplianceNotifications } from "../../hooks/useComplianceNotifications";
 import { StoredDocument } from "../../types/api";
 import { NavTab } from "./Sidebar";
+import appLogo from "../../assets/logos/logo-glencore.svg";
 
 export interface HeaderProps {
   onNavigateTab?: (tab: NavTab) => void;
@@ -35,13 +36,28 @@ export function Header({ onNavigateTab, onSelectDocument, onToggleMobileMenu }: 
         {/* Left Section: Mobile Menu Toggle & Extended Search Bar */}
         <div className="flex items-center gap-3 flex-1 max-w-3xl min-w-0">
           {onToggleMobileMenu && (
-            <button
-              onClick={onToggleMobileMenu}
-              className="w-9 h-9 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center lg:hidden cursor-pointer shrink-0"
-              title="Open Navigation Menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2 lg:hidden shrink-0">
+              <button
+                type="button"
+                onClick={onToggleMobileMenu}
+                className="w-9 h-9 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer shrink-0"
+                title="Open Navigation Menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateTab("dashboard")}
+                className="flex items-center cursor-pointer ml-1"
+                title="Glencore - DocExtract AI Dashboard"
+              >
+                <img
+                  src={appLogo}
+                  alt="Glencore Logo"
+                  className="h-5 w-auto object-contain shrink-0"
+                />
+              </button>
+            </div>
           )}
 
           {/* Extended Search Bar Button */}

@@ -4,6 +4,7 @@ import { useDocuments } from "../../hooks/useDocuments";
 
 export function StatsCards() {
   const { stats, allDocuments } = useDocuments();
+  const hasObligations = stats.totalObligations > 0;
 
   const cards = [
     {
@@ -48,13 +49,13 @@ export function StatsCards() {
     },
     {
       title: "Compliance Score",
-      value: `${stats.complianceScore}%`,
-      subtext: stats.totalObligations > 0 ? "Based on active register" : "Awaiting extractions",
-      isPositive: stats.complianceScore >= 80,
+      value: hasObligations ? `${stats.complianceScore}%` : "—",
+      subtext: hasObligations ? "Based on active register" : "Awaiting extractions",
+      isPositive: hasObligations && stats.complianceScore >= 80,
       icon: ShieldCheck,
       iconColor: "text-blue-600 bg-blue-50 dark:bg-blue-950/50 border-blue-100 dark:border-blue-900/50",
       isProgressBar: true,
-      progress: stats.complianceScore,
+      progress: hasObligations ? stats.complianceScore : 0,
     },
   ];
 
