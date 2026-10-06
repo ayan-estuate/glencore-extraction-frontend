@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Loader2, Sparkles, FileText, ShieldCheck } from "lucide-react";
+import { Check, Loader2, Sparkles, FileText, ShieldCheck, X } from "lucide-react";
 import { StepProgressInfo } from "../../hooks/useLogStream";
 import { cn } from "../../lib/utils";
 
@@ -20,15 +20,19 @@ export function StepProgress({ stepInfo }: StepProgressProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {steps.map((s) => {
           const Icon = s.icon;
-          const isDone = stepInfo.step > s.num || stepInfo.status === "complete";
-          const isCurrent = stepInfo.step === s.num && stepInfo.status !== "complete";
+          const failed = stepInfo.status === "error";
+          const isDone = stepInfo.status === "complete" || stepInfo.step > s.num;
+          const isFailedStep = failed && stepInfo.step === s.num;
+          const isCurrent = !failed && stepInfo.step === s.num && stepInfo.status !== "complete";
 
           return (
             <div
               key={s.num}
               className={cn(
                 "flex items-center gap-2.5 p-2.5 rounded-lg border transition-all",
-                isDone
+                isFailedStep
+                  ? "bg-red-950/50 border-red-700/70 text-red-200"
+                  : isDone
                   ? "bg-blue-950/40 border-blue-800/60 text-blue-300"
                   : isCurrent
                   ? "bg-blue-900/60 border-blue-600 text-white shadow-xs"
@@ -38,14 +42,18 @@ export function StepProgress({ stepInfo }: StepProgressProps) {
               <div
                 className={cn(
                   "w-7 h-7 rounded-md flex items-center justify-center shrink-0 font-mono text-xs font-bold",
-                  isDone
+                  isFailedStep
+                    ? "bg-red-600 text-white"
+                    : isDone
                     ? "bg-blue-600 text-white"
                     : isCurrent
                     ? "bg-blue-500 text-white"
                     : "bg-slate-800 text-slate-500"
                 )}
               >
-                {isDone ? (
+                {isFailedStep ? (
+                  <X className="w-4 h-4" />
+                ) : isDone ? (
                   <Check className="w-4 h-4" />
                 ) : isCurrent ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -57,7 +65,7 @@ export function StepProgress({ stepInfo }: StepProgressProps) {
               <div className="flex flex-col truncate">
                 <span className="text-xs font-semibold truncate leading-tight">{s.title}</span>
                 <span className="text-[10px] text-slate-400 font-mono truncate">
-                  {isDone ? "Complete" : isCurrent ? "Processing..." : "Pending"}
+                  {isFailedStep ? "Failed" : isDone ? "Complete" : isCurrent ? "Processing..." : "Pending"}
                 </span>
               </div>
             </div>

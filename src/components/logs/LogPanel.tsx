@@ -55,7 +55,7 @@ export function LogPanel({
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-blue-400" />
           <span className="text-xs font-mono font-semibold text-slate-200">
-            Real-Time Processing Stream
+            Job Log
           </span>
           <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-400">
             {logs.length} events
@@ -63,7 +63,7 @@ export function LogPanel({
           {isStreaming && (
             <span className="flex items-center gap-1.5 text-[11px] text-blue-400 font-mono animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              Live SSE
+              Updating
             </span>
           )}
         </div>

@@ -25,6 +25,7 @@ import { useAppStore } from "../../stores/useAppStore";
 import { formatBytes, formatDate } from "../../lib/utils";
 import { apiExportJob } from "../../lib/apiClient";
 import { useSnackbar } from "../../hooks/useSnackbar";
+import { JobSegmentsPanel } from "./JobSegmentsPanel";
 
 interface JobDetailsModalProps {
   job: JobSummary | null;
@@ -260,14 +261,14 @@ export function JobDetailsModal({ job, onClose }: JobDetailsModalProps) {
               <div>
                 <span className="text-[10px] font-mono uppercase text-slate-400 block">Provider</span>
                 <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">
-                  {job.requestedProvider || "GEMINI (Default)"}
+                  {job.requestedProvider || "—"}
                 </span>
               </div>
 
               <div>
                 <span className="text-[10px] font-mono uppercase text-slate-400 block">Model</span>
                 <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs font-mono">
-                  {job.requestedModel || "default"}
+                  {job.requestedModel || "—"}
                 </span>
               </div>
 
@@ -288,6 +289,8 @@ export function JobDetailsModal({ job, onClose }: JobDetailsModalProps) {
               </div>
             )}
           </div>
+
+          <JobSegmentsPanel jobId={job.jobId} />
 
           {/* Timestamp Audit Trail */}
           <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">

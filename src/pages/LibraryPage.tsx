@@ -155,6 +155,16 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
     fetchJobs();
   }, [fetchJobs]);
 
+  // While any job is still queued or running, keep the list live.
+  const hasActiveJobs = useAppStore((state) =>
+    state.jobs.some((j) => j.status === "QUEUED" || j.status === "RUNNING")
+  );
+  useEffect(() => {
+    if (!hasActiveJobs) return;
+    const t = setInterval(() => fetchJobs(true), 3000);
+    return () => clearInterval(t);
+  }, [hasActiveJobs, fetchJobs]);
+
 
   const handleSelectDoc = (doc: StoredDocument) => {
     if (onSelectDocument) onSelectDocument(doc);
@@ -932,7 +942,7 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
                               {job.requestedProvider || "GEMINI"}
                             </span>
                             <span className="text-[10px] text-slate-400 block">
-                              {job.requestedModel || "default"}
+                              {job.requestedModel || "—"}
                             </span>
                           </div>
                         </td>
@@ -1008,11 +1018,11 @@ export function LibraryPage({ onSelectDocument, onNavigateToUpload }: LibraryPag
       <ConfirmModal
         isOpen={Boolean(docToDelete)}
         title="Delete Document"
-        message={`Are you sure you want to remove "${docToDelete?.documentTitle || docToDelete?.documentId}" from the compliance register?`}
-        confirmLabel="Delete"
+        description={`Are you sure you want to remove "${docToDelete?.documentTitle || docToDelete?.documentId}" from the compliance register?`}
+        confirmText="Delete"
         variant="danger"
         onConfirm={confirmDelete}
-        onCancel={() => setDocToDelete(null)}
+        onClose={() => setDocToDelete(null)}
       />
 
       {/* Job Telemetry Modal */}
