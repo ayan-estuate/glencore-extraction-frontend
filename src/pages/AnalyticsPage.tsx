@@ -136,7 +136,7 @@ export function AnalyticsPage() {
   // Real KPI: Success Rate from actual jobs
   const overallSuccessRate = useMemo(() => {
     if (jobs.length === 0) return 0;
-    const completed = jobs.filter((j) => j.status === "COMPLETED" || j.status === "SUCCESS").length;
+    const completed = jobs.filter((j) => j.status === "COMPLETED").length;
     return Math.round((completed / jobs.length) * 100);
   }, [jobs]);
 
@@ -254,7 +254,7 @@ export function AnalyticsPage() {
 
     jobs.forEach((job) => {
       const provider = (job.requestedProvider || "GEMINI").toUpperCase();
-      const model = job.requestedModel || "default";
+      const model = job.requestedModel || "Unknown";
       const key = `${provider}::${model}`;
 
       if (!map.has(key)) {
@@ -274,7 +274,7 @@ export function AnalyticsPage() {
       const item = map.get(key)!;
       item.total += 1;
 
-      if (job.status === "COMPLETED" || job.status === "SUCCESS") {
+      if (job.status === "COMPLETED") {
         item.completed += 1;
       } else if (job.status === "FAILED" || job.status === "DEAD_LETTER") {
         item.failed += 1;
@@ -301,7 +301,7 @@ export function AnalyticsPage() {
       const existsInJobs = jobs.some((j) => j.jobId === doc.jobId || j.jobId === doc.id);
       if (!existsInJobs) {
         const provider = (doc.llmProvider || "GEMINI").toUpperCase();
-        const model = doc.llmModel || "default";
+        const model = doc.llmModel || "Unknown";
         const key = `${provider}::${model}`;
 
         if (!map.has(key)) {
@@ -517,7 +517,7 @@ export function AnalyticsPage() {
           </div>
           <div className="flex items-center justify-between pt-1">
             <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              <span>{jobs.filter((j) => j.status === "COMPLETED" || j.status === "SUCCESS").length} of {jobs.length} jobs completed</span>
+              <span>{jobs.filter((j) => j.status === "COMPLETED").length} of {jobs.length} jobs completed</span>
             </div>
             <svg className="w-16 h-7 overflow-visible" viewBox="0 0 64 28">
               <path

@@ -66,10 +66,12 @@ export function ActivityFeed({ documents, onViewDetail }: ActivityFeedProps) {
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="blue" size="sm" className="hidden sm:inline-flex">
-                  <Sparkles className="w-3 h-3 mr-1" />
-                  {doc.rawResponse?.metadata?.provider || "GEMINI"}
-                </Badge>
+                {(doc.llmProvider || doc.rawResponse?.provider) && (
+                  <Badge variant="blue" size="sm" className="hidden sm:inline-flex">
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    {doc.llmProvider || doc.rawResponse?.provider}
+                  </Badge>
+                )}
                 <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
               </div>
             </div>

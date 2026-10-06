@@ -114,6 +114,9 @@ export function ObligationsPage() {
           dueDate: so.dueDate,
           section: so.section,
           obligationOwner: so.obligationOwner,
+          obligationClass: so.obligationClass ?? "",
+          sourcePage: so.sourcePage ?? null,
+          sourceChunkId: so.sourceChunkId ?? null,
           docId: so.jobId || so.documentId,
           documentId: so.documentId || so.jobId,
           documentTitle: so.documentTitle || "Compliance Document",
@@ -748,7 +751,7 @@ export function ObligationsPage() {
                           <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-medium text-xs">
                             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <span className="truncate max-w-[140px] capitalize">
-                              {ob.obligationOwner || "missing"}
+                              {ob.obligationOwner && ob.obligationOwner.trim().toLowerCase() !== "missing" ? ob.obligationOwner : "—"}
                             </span>
                           </div>
                         </td>
