@@ -6,77 +6,57 @@ export const API_CONFIG = {
   HEADERS: {
     API_KEY: "X-API-Key",
   },
-  TIMEOUT: 180000, // 3 minutes for async extraction / polling
+  TIMEOUT: 180000, // Per-HTTP-request timeout (upload, one status poll, etc.) — NOT
+  // the overall job-polling budget, which is useExtraction.ts's own maxTimeoutMs.
   POLL_INTERVAL_MS: 1500, // Poll job status every 1.5 seconds
 
   ENDPOINTS: {
     JOBS: "/api/v1/document/jobs",
     JOB_STATUS: (id: string) => `/api/v1/document/jobs/${id}`,
+    JOB_PROGRESS: (id: string) => `/api/v1/document/jobs/${id}/progress`,
     JOB_RESULT: (id: string) => `/api/v1/document/jobs/${id}/result`,
     JOB_EXPORT: (id: string, format: string = "DOCX") => `/api/v1/document/jobs/${id}/export?format=${format}`,
-    EXTRACT: "/api/v1/document/extract",
-    EXPORT_FILE: "/api/v1/document/export",
-    KEYS_TEST: "/api/v1/keys/test",
     HEALTH: "/health",
     INFO: "/info",
     VERSION: "/version",
-    NOTIFICATIONS_SETTINGS: "/api/v1/notifications/settings",
-    TENANT_NOTIFICATIONS_SETTINGS: (tenantId: string) => `/api/v1/notifications/settings/${encodeURIComponent(tenantId)}`,
-    NOTIFICATIONS_TEST: "/api/v1/notifications/test",
+    // Works with any authenticated key (EXTRACT, TENANT_ADMIN, PLATFORM_ADMIN) —
+    // returns the calling credential's own tenant/roles. Not gated like the routes below.
+    WHOAMI: "/api/v1/tenants/me",
+    // Tenant administration — every route below requires an X-API-Key issued with
+    // TENANT_ADMIN (scoped to its own tenant) or PLATFORM_ADMIN (cross-tenant) — see
+    // contexts/tenancy/interfaces/api/router.py; pass it explicitly, never the
+    // regular working key (apiClient.ts's adminHeaders()).
     TENANTS: "/api/v1/tenants",
+    TENANT_DETAIL: (tenantId: string) => `/api/v1/tenants/${encodeURIComponent(tenantId)}`,
+    TENANT_API_KEYS: (tenantId: string) => `/api/v1/tenants/${encodeURIComponent(tenantId)}/api-keys`,
+    TENANT_API_KEY_DETAIL: (tenantId: string, keyId: string) =>
+      `/api/v1/tenants/${encodeURIComponent(tenantId)}/api-keys/${encodeURIComponent(keyId)}`,
     OBLIGATIONS: "/api/v1/obligations",
     UPDATE_OBLIGATION: (jobId: string, obligationId: string) =>
       `/api/v1/document/jobs/${encodeURIComponent(jobId)}/obligations/${encodeURIComponent(obligationId)}`,
+    // Break-glass recovery for the one root PLATFORM_ADMIN credential —
+    // both unauthenticated by design, see recovery_router.py.
+    RECOVERY_REQUEST: "/api/v1/recovery/request",
+    RECOVERY_CONFIRM: "/api/v1/recovery/confirm",
+    // Per-tenant LLM providers (keys stored encrypted server-side, never returned).
+    // LLM_PROVIDERS: the working key's own tenant (any role) — feeds the upload form.
+    // TENANT_LLM_PROVIDERS*: admin management, same two-tier scoping as the routes above.
+    LLM_PROVIDERS: "/api/v1/llm-providers",
+    TENANT_LLM_PROVIDERS: (tenantId: string) =>
+      `/api/v1/tenants/${encodeURIComponent(tenantId)}/llm-providers`,
+    TENANT_LLM_PROVIDER: (tenantId: string, id: string) =>
+      `/api/v1/tenants/${encodeURIComponent(tenantId)}/llm-providers/${encodeURIComponent(id)}`,
+    // Per-tenant outbound mail (SMTP) settings; the password is encrypted server-side.
+    TENANT_SMTP: (tenantId: string) => `/api/v1/tenants/${encodeURIComponent(tenantId)}/smtp`,
+    TENANT_SMTP_TEST: (tenantId: string) => `/api/v1/tenants/${encodeURIComponent(tenantId)}/smtp/test`,
   },
 
   DEFAULT_OPTIONS: {
-    temperature: 0.1,
-    provider: "GEMINI",
-    model: "gemini-3.5-flash",
     language: "source",
   },
 
-  PROVIDERS: [
-    {
-      id: "GEMINI",
-      name: "Google Gemini",
-      defaultModel: "gemini-3.5-flash",
-      models: [
-        { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash (Primary Default)" },
-        { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview" },
-        { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash-Lite (Fast GA Fallback)" },
-        { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview (Deep Reasoning)" },
-      ],
-    },
-    {
-      id: "CLAUDE",
-      name: "Anthropic Claude (SDK Engine)",
-      defaultModel: "claude-opus-5",
-      models: [
-        { id: "claude-opus-5", name: "Claude Opus 5 (Frontier Legal Reasoner)" },
-        { id: "claude-sonnet-5", name: "Claude Sonnet 5 (High Recall Balanced)" },
-        { id: "claude-haiku-4-5", name: "Claude Haiku 4.5 (High Speed Classifier)" },
-        { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet (GA Baseline)" },
-      ],
-    },
-    {
-      id: "OPENAI",
-      name: "OpenAI GPT-4o",
-      defaultModel: "gpt-4o-mini",
-      models: [
-        { id: "gpt-4o", name: "GPT-4o (Omni Reasoning)" },
-        { id: "gpt-4o-mini", name: "GPT-4o Mini (High Efficiency)" },
-      ],
-    },
-    {
-      id: "OLLAMA",
-      name: "Ollama (On-Premises / Air-Gapped)",
-      defaultModel: "qwen3:1.7b",
-      models: [
-        { id: "qwen3:1.7b", name: "Qwen 3 1.7B (Local Model)" },
-      ],
-    },
-  ],
+  // Providers and models are not hardcoded here: each tenant configures its own
+  // in Settings > LLM Providers, and the upload form offers exactly those.
 
   LANGUAGES: [
     { code: "source", name: "Source Document Language (Auto-Detect)" },
@@ -87,41 +67,6 @@ export const API_CONFIG = {
     { code: "de", name: "German / Deutsch" },
   ],
 } as const;
-
-export const DEFAULT_TENANT_EMAIL_SETTINGS = {
-  glencore: {
-    tenantId: "glencore",
-    enabled: true,
-    from: "compliance-alerts@glencore.internal",
-    subjectPrefix: "[Obligation Extraction - Glencore]",
-    resultBaseUrl: "http://localhost:5173/library/",
-    notifyOn: ["PARTIAL", "FAILED", "DEAD_LETTER"] as ("PARTIAL" | "FAILED" | "DEAD_LETTER" | "COMPLETED")[],
-    includeDocumentName: false,
-    includeErrorDetail: true,
-    maxErrorDetailChars: 300,
-    recipients: ["ehs-alerts@glencore.com", "compliance-ops@glencore.com"],
-    smtpHost: "smtp.gmail.com",
-    smtpPort: 587,
-    smtpUsername: "qode.ai.noreply@gmail.com",
-    smtpPasswordConfigured: false,
-  },
-  default: {
-    tenantId: "default",
-    enabled: false,
-    from: "no-reply@compliance.internal",
-    subjectPrefix: "[Obligation Extraction]",
-    resultBaseUrl: "http://localhost:5173/library/",
-    notifyOn: ["PARTIAL", "FAILED", "DEAD_LETTER"] as ("PARTIAL" | "FAILED" | "DEAD_LETTER" | "COMPLETED")[],
-    includeDocumentName: false,
-    includeErrorDetail: true,
-    maxErrorDetailChars: 300,
-    recipients: ["ops@example.com"],
-    smtpHost: "smtp.gmail.com",
-    smtpPort: 587,
-    smtpUsername: "qode.ai.noreply@gmail.com",
-    smtpPasswordConfigured: false,
-  },
-};
 
 export const DEFAULT_NOTIFICATION_PREFERENCES = {
   notifyOverdueObligations: true,
