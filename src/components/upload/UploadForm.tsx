@@ -4,13 +4,11 @@ import {
   ChevronUp,
   Settings2,
   Sparkles,
-  Sliders,
   Languages,
   MessageSquare,
   Code2,
   ShieldCheck,
   Cpu,
-  Layers,
   FileCheck,
   Info,
   CheckCircle2,
@@ -21,6 +19,8 @@ import { API_CONFIG } from "../../config/api.config";
 import { ExtractionOptions } from "../../types/api";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/Button";
+import { useLlmProviders } from "../../hooks/useLlmProviders";
+import { Link } from "react-router-dom";
 
 export interface UploadFormProps {
   options: ExtractionOptions;
@@ -122,14 +122,26 @@ export function UploadForm({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedSchemaPreset, setSelectedSchemaPreset] = useState<string>("standard");
 
+  const { providers, isLoading: providersLoading, error: providersError } = useLlmProviders();
+  const activeProvider = providers.find((p) => p.id === options.llmProviderId) || providers[0];
+  const noProviders = !providersLoading && !providersError && providers.length === 0;
+
+  // Always submit an explicit, real choice: the selected (or first) provider and model.
+  React.useEffect(() => {
+    if (!activeProvider) return;
+    const modelOk = activeProvider.models.some((m) => m.id === options.model);
+    if (options.llmProviderId !== activeProvider.id || !modelOk) {
+      setOptions((prev) => ({
+        ...prev,
+        llmProviderId: activeProvider.id,
+        model: modelOk ? prev.model : activeProvider.models[0]?.id,
+      }));
+    }
+  }, [activeProvider, options.llmProviderId, options.model, setOptions]);
+
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const provider = e.target.value;
-    const found = API_CONFIG.PROVIDERS.find((p) => p.id === provider);
-    setOptions((prev) => ({
-      ...prev,
-      provider,
-      model: found ? found.defaultModel : prev.model,
-    }));
+    const found = providers.find((p) => p.id === e.target.value);
+    setOptions((prev) => ({ ...prev, llmProviderId: found?.id, model: found?.models[0]?.id }));
   };
 
   const handleSchemaPresetChange = (presetId: string) => {
@@ -141,10 +153,6 @@ export function UploadForm({
       setOptions((prev) => ({ ...prev, responseSchema: found.schema }));
     }
   };
-
-  const activeProvider = API_CONFIG.PROVIDERS.find(
-    (p) => p.id === (options.provider || "GEMINI")
-  );
 
   return (
     <div className="w-full space-y-4">
@@ -183,12 +191,18 @@ export function UploadForm({
                 <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
                 LLM Provider & Engine
               </label>
-              <Select
-                value={options.provider || "GEMINI"}
-                onChange={handleProviderChange}
-                options={API_CONFIG.PROVIDERS.map((p) => ({ value: p.id, label: p.name }))}
-                className="w-full"
-              />
+              {providers.length > 0 ? (
+                <Select
+                  value={activeProvider?.id ?? ""}
+                  onChange={handleProviderChange}
+                  options={providers.map((p) => ({ value: p.id, label: `${p.label} (${p.providerType})` }))}
+                  className="w-full"
+                />
+              ) : (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {providersLoading ? "Loading providers..." : providersError || "No provider configured."}
+                </p>
+              )}
             </div>
 
             {/* Model Selection */}
@@ -197,16 +211,16 @@ export function UploadForm({
                 <Cpu className="w-4 h-4 text-purple-500 shrink-0" />
                 Specific Model
               </label>
-              <Select
-                value={options.model || activeProvider?.defaultModel || ""}
-                onChange={(e) => setOptions((prev) => ({ ...prev, model: e.target.value }))}
-                options={
-                  activeProvider?.models.map((m) => ({ value: m.id, label: m.name })) || [
-                    { value: "default", label: "Provider Default" },
-                  ]
-                }
-                className="w-full"
-              />
+              {activeProvider ? (
+                <Select
+                  value={options.model || activeProvider.models[0]?.id || ""}
+                  onChange={(e) => setOptions((prev) => ({ ...prev, model: e.target.value }))}
+                  options={activeProvider.models.map((m) => ({ value: m.id, label: m.id }))}
+                  className="w-full"
+                />
+              ) : (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">—</p>
+              )}
             </div>
 
             {/* Language Selection */}
@@ -224,55 +238,6 @@ export function UploadForm({
               <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
                 Italian (ita) includes Tesseract multi-language accent preservation.
               </span>
-            </div>
-
-            {/* Pipeline Execution Mode */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-emerald-500 shrink-0" />
-                Execution Pipeline Mode
-              </label>
-              <Select
-                value={options.wait ? "sync" : "async"}
-                onChange={(e) => setOptions((prev) => ({ ...prev, wait: e.target.value === "sync" }))}
-                options={[
-                  { value: "async", label: "Async Queue Worker (Recommended, 202 Accepted + 100MB Spooling)" },
-                  { value: "sync", label: "Synchronous (wait=true, Interactive Inline 200 OK)" },
-                ]}
-                className="w-full"
-              />
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
-                Async queue utilizes PostgreSQL durability, 15m leases, and 7-day SHA-256 reuse cache.
-              </span>
-            </div>
-
-            {/* Temperature Slider */}
-            <div className="space-y-1.5 md:col-span-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Sliders className="w-4 h-4 text-blue-500 shrink-0" />
-                  Model Temperature (Strict / Fact-Bound vs Creative)
-                </label>
-                <span className="text-xs font-mono font-semibold text-blue-600 dark:text-blue-400">
-                  {options.temperature ?? 0.1}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0.0"
-                max="1.0"
-                step="0.05"
-                value={options.temperature ?? 0.1}
-                onChange={(e) =>
-                  setOptions((prev) => ({ ...prev, temperature: parseFloat(e.target.value) }))
-                }
-                className="w-full accent-blue-600 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                <span>0.0 (Strict / Zero Hallucination)</span>
-                <span>0.1 (Recommended for Compliance)</span>
-                <span>1.0 (Creative / Broad)</span>
-              </div>
             </div>
 
             {/* Response Schema Preset Selection */}
@@ -391,11 +356,21 @@ export function UploadForm({
       )}
     </div>
 
+      {noProviders && (
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+          No LLM provider is configured for this tenant, so extraction is unavailable. An admin can add one under{" "}
+          <Link to="/settings" state={{ tab: "llm" }} className="font-semibold underline">
+            Settings &gt; LLM Providers
+          </Link>
+          .
+        </div>
+      )}
+
       {/* Primary Action Button */}
       <button
         type="button"
         onClick={onExtract}
-        disabled={disabled || isExtracting}
+        disabled={disabled || isExtracting || !activeProvider}
         className="w-full py-3.5 sm:py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm flex items-center justify-center gap-2.5 shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isExtracting ? (
