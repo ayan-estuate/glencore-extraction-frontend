@@ -10,10 +10,12 @@ import {
   ChevronRight,
   Shield,
   CheckCircle2,
+  ShieldAlert,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "../../lib/utils";
 import { useAppStore } from "../../stores/useAppStore";
+import { useJobTrackerStore, selectUnfinishedCount } from "../../stores/useJobTrackerStore";
 import appLogo from "../../assets/logos/logo-glencore.svg";
 
 export type NavTab =
@@ -36,6 +38,14 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
   const location = useLocation();
   const navigate = useNavigate();
   const activeTenantId = useAppStore((state) => state.activeTenantId);
+  const adminRole = useAppStore((state) => state.adminRole);
+  const clearAdminSession = useAppStore((state) => state.clearAdminSession);
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
+  const handleSignOutAdmin = () => {
+    clearAdminSession();
+    if (isAdminRoute) navigate("/dashboard");
+  };
 
   const currentTab: NavTab = React.useMemo(() => {
     if (activeTab) return activeTab;
@@ -60,6 +70,8 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
       onCloseMobile();
     }
   };
+
+  const runningJobs = useJobTrackerStore(selectUnfinishedCount);
 
   const mainNavItems = [
     { id: "dashboard" as NavTab, label: "Dashboard", icon: LayoutDashboard },
@@ -178,9 +190,54 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
                   {(!collapsed || isMobileOpen) && (
                     <span className="truncate flex-1 text-left">{item.label}</span>
                   )}
+                  {item.id === "upload" && runningJobs > 0 && (
+                    <span
+                      title={`${runningJobs} extraction${runningJobs > 1 ? "s" : ""} in progress`}
+                      className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center animate-pulse"
+                    >
+                      {runningJobs}
+                    </span>
+                  )}
                 </button>
               );
             })}
+
+            {/* Administration — rendered only once adminRole is verified, as its
+                own separate block rather than folded into mainNavItems, so a
+                regular tenant user's nav never even shows this exists. */}
+            {adminRole && (
+              <div className="pt-2 mt-2 border-t border-slate-200/70 dark:border-slate-800">
+                {(!collapsed || isMobileOpen) && (
+                  <span className="px-3 text-[9px] uppercase tracking-wider text-slate-400 font-semibold block mb-1">
+                    Administration
+                  </span>
+                )}
+                <button
+                  onClick={() => {
+                    navigate("/admin/tenants");
+                    if (onCloseMobile) onCloseMobile();
+                  }}
+                  title={collapsed && !isMobileOpen ? "Admin Console" : undefined}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer group relative",
+                    collapsed && !isMobileOpen && "justify-center px-0",
+                    isAdminRoute
+                      ? "bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60 shadow-2xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-purple-700 dark:hover:text-purple-300 hover:bg-purple-50/60 dark:hover:bg-purple-950/30"
+                  )}
+                >
+                  <ShieldAlert
+                    className={cn(
+                      "w-4 h-4 shrink-0 transition-colors",
+                      isAdminRoute ? "text-purple-600 dark:text-purple-400" : "text-slate-400 group-hover:text-purple-600"
+                    )}
+                  />
+                  {(!collapsed || isMobileOpen) && (
+                    <span className="truncate flex-1 text-left">Admin Console</span>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -195,20 +252,32 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
                     Tenant
                   </span>
                   <span className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate">
-                    {activeTenantId || "default"}
+                    {activeTenantId || "—"}
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium shrink-0">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Online</span>
-              </div>
+              {adminRole ? (
+                <button
+                  type="button"
+                  onClick={handleSignOutAdmin}
+                  className="flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-bold shrink-0 cursor-pointer hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                  title={`Elevated privileges loaded: ${adminRole}. Click to sign out of admin.`}
+                >
+                  <ShieldAlert className="w-3 h-3" />
+                  <span>{adminRole}</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium shrink-0">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Online</span>
+                </div>
+              )}
             </div>
           ) : (
             <div
               className="flex items-center justify-center py-1"
-              title={`Active Tenant: ${activeTenantId || "default"}`}
+              title={`Active Tenant: ${activeTenantId || "—"}`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
             </div>

@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Shield,
   Lock,
+  AlertTriangle,
 } from "lucide-react";
 import { API_CONFIG } from "../config/api.config";
 import { useNavigate } from "react-router-dom";
@@ -38,10 +39,13 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [options, setOptions] = useState<ExtractionOptions>({
-    temperature: API_CONFIG.DEFAULT_OPTIONS.temperature,
-    provider: API_CONFIG.DEFAULT_OPTIONS.provider,
     language: API_CONFIG.DEFAULT_OPTIONS.language,
   });
+
+  // The backend uses the literal "missing" (and apiClient a "default"
+  // placeholder) for values it could not find. Never display those as data.
+  const hasValue = (v?: string | null) =>
+    !!v && v.trim() !== "" && v.trim().toLowerCase() !== "missing" && v !== "default";
 
   const handleToLibrary = () => {
     if (onNavigateToLibrary) onNavigateToLibrary();
@@ -55,28 +59,13 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
 
   const { extractDocument, isExtracting, error, lastStoredDocument, logStream } = useExtraction();
   const updateObligationStatus = useAppStore((state) => state.updateObligationStatus);
-  const { success, error: errorSnackbar, info } = useSnackbar();
+  const { info } = useSnackbar();
 
   const handleStartExtraction = () => {
     if (!file) return;
     info(`Starting compliance parsing for ${file.name}...`, "Extraction Initiated");
     extractDocument(file, options);
   };
-
-  useEffect(() => {
-    if (error) {
-      errorSnackbar(error.message, `Extraction Error (${error.errorCode})`);
-    }
-  }, [error]);
-
-  useEffect(() => {
-    if (lastStoredDocument && !isExtracting) {
-      success(
-        `Parsed ${lastStoredDocument.obligations.length} statutory obligations from ${lastStoredDocument.documentId}`,
-        "Extraction Complete"
-      );
-    }
-  }, [lastStoredDocument, isExtracting]);
 
   const handleStatusChange = (docId: string, obId: string, status: ObligationStatus) => {
     updateObligationStatus(docId, obId, status);
@@ -163,13 +152,16 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
       {/* Inline Extraction Results (Shown upon completion) */}
       {lastStoredDocument && !isExtracting && (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
+          {lastStoredDocument.status === "COMPLETED" ? (
           <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <div>
                 <h3 className="text-sm font-semibold">Extraction Complete</h3>
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                  Successfully parsed {lastStoredDocument.obligations.length} compliance obligations. Document saved to library.
+                  {lastStoredDocument.obligations.length > 0
+                    ? `Successfully parsed ${lastStoredDocument.obligations.length} compliance obligations. Document saved to library.`
+                    : "Processing finished, but no obligations were found in this document."}
                 </p>
               </div>
             </div>
@@ -183,6 +175,21 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
               Go to Library
             </Button>
           </div>
+          ) : (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold">Extraction Incomplete</h3>
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Some parts of the document could not be processed, most likely because the AI provider was
+                unavailable. {lastStoredDocument.obligations.length} obligation(s) were found. Please try again later.
+              </p>
+            </div>
+          </div>
+          )}
+
+          {(lastStoredDocument.status === "COMPLETED" || lastStoredDocument.obligations.length > 0) && (
+          <>
 
           {/* Document Header Card */}
           <Card>
@@ -190,15 +197,17 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
+                    {hasValue(lastStoredDocument.documentId) && (
                     <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                       {lastStoredDocument.documentId}
                     </span>
+                    )}
                     <Badge variant="emerald" size="sm">
                       {lastStoredDocument.obligations.length} Obligations
                     </Badge>
                   </div>
                   <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                    {lastStoredDocument.documentTitle}
+                    {hasValue(lastStoredDocument.documentTitle) ? lastStoredDocument.documentTitle : lastStoredDocument.fileName}
                   </h2>
                 </div>
 
@@ -208,25 +217,33 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
 
             <CardContent className="space-y-4 pt-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 text-xs">
+                {hasValue(lastStoredDocument.entity) && (
                 <div className="flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
                   <span className="text-slate-600 dark:text-slate-400">Entity: <strong className="text-slate-900 dark:text-slate-200 font-medium">{lastStoredDocument.entity}</strong></span>
                 </div>
+                )}
 
+                {!!lastStoredDocument.rawResponse?.processingTime && (
                 <div className="flex items-center gap-2 font-mono">
                   <Clock className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-400">Processing Time: <strong className="text-slate-900 dark:text-slate-200">{lastStoredDocument.rawResponse?.processingTime || 0} ms</strong></span>
+                  <span className="text-slate-600 dark:text-slate-400">Processing Time: <strong className="text-slate-900 dark:text-slate-200">{lastStoredDocument.rawResponse.processingTime} ms</strong></span>
                 </div>
+                )}
 
+                {hasValue(lastStoredDocument.rawResponse?.model) && (
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-400">Model: <strong className="text-slate-900 dark:text-slate-200 font-mono">{lastStoredDocument.rawResponse?.metadata?.model || options.provider}</strong></span>
+                  <span className="text-slate-600 dark:text-slate-400">Model: <strong className="text-slate-900 dark:text-slate-200 font-mono">{lastStoredDocument.rawResponse?.model}</strong></span>
                 </div>
+                )}
               </div>
 
+              {hasValue(lastStoredDocument.documentDescription) && (
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                 {lastStoredDocument.documentDescription}
               </p>
+              )}
             </CardContent>
           </Card>
 
@@ -242,6 +259,8 @@ export function UploadPage({ onNavigateToLibrary, onSelectDocument }: UploadPage
               onStatusChange={(dId, obId, st) => handleStatusChange(dId, obId, st)}
             />
           </div>
+          </>
+          )}
         </div>
       )}
     </div>
