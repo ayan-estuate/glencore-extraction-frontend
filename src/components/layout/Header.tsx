@@ -1,12 +1,62 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, HelpCircle, UploadCloud, Menu } from "lucide-react";
+import { Search, Bell, HelpCircle, UploadCloud, Menu, ShieldCheck, KeyRound } from "lucide-react";
 import { CommandPalette } from "../common/CommandPalette";
 import { NotificationsPopover } from "../common/NotificationsPopover";
 import { useComplianceNotifications } from "../../hooks/useComplianceNotifications";
+import { useAppStore } from "../../stores/useAppStore";
 import { StoredDocument } from "../../types/api";
 import { NavTab } from "./Sidebar";
 import appLogo from "../../assets/logos/logo-glencore.svg";
+
+/** Always-visible "who is this session acting as" indicator — previously
+ * there was no identity display anywhere in the Header, and the Sidebar's
+ * equivalent was a low-prominence footer card that disappears entirely when
+ * the sidebar is collapsed. This is the one place guaranteed visible on
+ * every page, so admin actions and extractions are never performed without
+ * it being obvious which key/tenant/role is acting.
+ */
+function IdentityBadge() {
+  const { apiKey, apiKeyIdentity, adminRole, adminKeyLabel } = useAppStore();
+  const navigate = useNavigate();
+
+  if (!apiKey) {
+    return (
+      <button
+        type="button"
+        onClick={() => navigate("/settings")}
+        title="No API key configured — click to set one"
+        className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 text-[11px] font-semibold cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors"
+      >
+        <KeyRound className="w-3.5 h-3.5" />
+        <span>No API key set</span>
+      </button>
+    );
+  }
+
+  const tenantLabel = apiKeyIdentity ? `${apiKeyIdentity.label} · ${apiKeyIdentity.tenantId}` : "Verifying key…";
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate("/settings")}
+      title={apiKeyIdentity ? `Acting as "${apiKeyIdentity.label}" for tenant "${apiKeyIdentity.tenantId}" (${apiKeyIdentity.roles.join(", ")})` : "Resolving active key identity..."}
+      className="hidden sm:flex items-center gap-1.5 h-9 pl-2.5 pr-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 text-[11px] font-semibold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors max-w-[220px]"
+    >
+      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+      <span className="truncate">{tenantLabel}</span>
+      {adminRole && (
+        <span
+          className="ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 shrink-0"
+          title={adminKeyLabel ? `Admin session: "${adminKeyLabel}" (${adminRole})` : adminRole}
+        >
+          <ShieldCheck className="w-3 h-3" />
+          {adminRole}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export interface HeaderProps {
   onNavigateTab?: (tab: NavTab) => void;
@@ -77,6 +127,9 @@ export function Header({ onNavigateTab, onSelectDocument, onToggleMobileMenu }: 
 
         {/* Right Section: Utility Tools, Profile & Action Button */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+
+          {/* Acting-as identity — always visible, see IdentityBadge's comment */}
+          <IdentityBadge />
 
           {/* Notification Bell */}
           <div className="relative">
