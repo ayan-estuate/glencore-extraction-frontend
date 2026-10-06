@@ -1,52 +1,43 @@
 import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Settings,
-  Key,
   ShieldCheck,
   Server,
   Sparkles,
   Moon,
   Sun,
-  Cpu,
-  Layers,
   Boxes,
   CheckCircle2,
-  AlertCircle,
   RefreshCw,
   Clock,
   FileText,
   Sliders,
   Database,
-  Check,
-  RotateCcw,
   Mail,
   Lock,
   Bell,
-  Eye,
-  EyeOff,
   BookOpen,
   Home,
   ChevronRight,
-  ChevronDown,
   Link2,
   Sprout,
   ShieldAlert,
+  Info,
+  Cpu,
 } from "lucide-react";
 import { useAppStore } from "../stores/useAppStore";
 import { useSnackbar } from "../hooks/useSnackbar";
-import {
-  apiGetHealth,
-  apiGetInfo,
-  apiGetVersion,
-  apiTestKey,
-  apiTestTenantKey,
-} from "../lib/apiClient";
+import { apiGetHealth, apiGetInfo, apiGetVersion } from "../lib/apiClient";
 import { API_CONFIG } from "../config/api.config";
-import { ServiceHealth, SystemInfo, SystemVersion, ApiKeyTestResponse } from "../types/api";
+import { ServiceHealth, SystemInfo, SystemVersion } from "../types/api";
 import { formatDate } from "../lib/utils";
 import { TenantEmailSettingsPanel } from "../components/settings/TenantEmailSettingsPanel";
+import { LlmProvidersPanel } from "../components/settings/LlmProvidersPanel";
 
-type SettingsSubTab = "security" | "email" | "preferences" | "health";
+// Tenant Administration lives at /admin/tenants (a guarded route, see
+// RequireAdmin), not a Settings sub-tab — see Card 2 below for the entry point.
+type SettingsSubTab = "security" | "llm" | "email" | "preferences" | "health";
 
 const SETTINGS_TABS = [
   {
@@ -54,6 +45,12 @@ const SETTINGS_TABS = [
     name: "API Credentials",
     description: "Connect & authenticate",
     icon: Link2,
+  },
+  {
+    id: "llm" as const,
+    name: "LLM Providers",
+    description: "Keys and models",
+    icon: Cpu,
   },
   {
     id: "email" as const,
@@ -76,12 +73,19 @@ const SETTINGS_TABS = [
 ];
 
 export function SettingsPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>("security");
   const {
     theme,
     toggleTheme,
     apiKey,
-    setApiKey,
+    apiKeyIdentity,
+    adminApiKey,
+    adminRole,
+    adminKeyLabel,
+    adminScopeTenantId,
+    logout,
     jobs,
     fetchJobs,
     notificationPreferences,
@@ -90,22 +94,26 @@ export function SettingsPage() {
   } = useAppStore();
   const { success, error: errorSnackbar, info } = useSnackbar();
 
-  // Security / Tenant API Key state
-  const [keyInput, setKeyInput] = useState(apiKey);
-  const [showTenantKey, setShowTenantKey] = useState(false);
-  const [isTestingKey, setIsTestingKey] = useState(false);
-  const [keyTestResult, setKeyTestResult] = useState<ApiKeyTestResponse | null>(null);
+  // Redirected here by RequireAdmin (visiting /admin/* without a verified
+  // admin role on the current session) — the current key just doesn't carry
+  // an admin role; signing in with a different key is the only fix now that
+  // key entry only happens on /login, not here.
+  // Deep link from elsewhere (e.g. the upload form's "no LLM provider" notice).
+  useEffect(() => {
+    const tab = (location.state as { tab?: SettingsSubTab } | null)?.tab;
+    if (tab && SETTINGS_TABS.some((t) => t.id === tab)) setActiveSubTab(tab);
+  }, [location.state]);
 
-  // Security / LLM Provider Key tester state
-  const [llmProvider, setLlmProvider] = useState("GEMINI");
-  const [llmKeyInput, setLlmKeyInput] = useState("");
-  const [showLlmKey, setShowLlmKey] = useState(false);
-  const [isTestingLlmKey, setIsTestingLlmKey] = useState(false);
-  const [llmKeyTestResult, setLlmKeyTestResult] = useState<ApiKeyTestResponse | null>(null);
-
-  // Preferences state
-  const [temperature, setTemperature] = useState("0.1");
-  const [defaultProvider, setDefaultProvider] = useState("GEMINI");
+  useEffect(() => {
+    if ((location.state as { needsAdminKey?: boolean } | null)?.needsAdminKey) {
+      setActiveSubTab("security");
+      info(
+        "Your current key has no admin role — sign out and sign in with a TENANT_ADMIN or PLATFORM_ADMIN key to open the Admin Console",
+        "Admin Access Required"
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // Health state
   const [healthData, setHealthData] = useState<ServiceHealth | null>(null);
@@ -151,76 +159,13 @@ export function SettingsPage() {
     }
   }, [activeSubTab]);
 
-  const handleSaveKey = () => {
-    setApiKey(keyInput.trim());
-    success("Backend API Key updated and saved", "Key Saved");
-  };
-
-  const handleResetKey = () => {
-    const defaultKey = API_CONFIG.DEFAULT_API_KEY;
-    setKeyInput(defaultKey);
-    setApiKey(defaultKey);
-    setKeyTestResult(null);
-    info("Reset API key to local default development key", "Key Reset");
-  };
-
-  const handleTestKey = async () => {
-    if (!keyInput.trim()) {
-      errorSnackbar("Please enter an API Key to test", "Validation Error");
-      return;
-    }
-    setIsTestingKey(true);
-    setKeyTestResult(null);
-    try {
-      const res = await apiTestTenantKey(keyInput.trim());
-      setKeyTestResult(res);
-      if (res.valid) {
-        success(`Key validated successfully for tenant: ${res.tenantId || "default"}`, "Authentication Succeeded");
-      } else {
-        errorSnackbar(res.message || "Key validation failed", "Invalid Key");
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to connect to authentication server";
-      errorSnackbar(msg, "Key Test Failed");
-      setKeyTestResult({
-        valid: false,
-        message: msg,
-      });
-    } finally {
-      setIsTestingKey(false);
-    }
-  };
-
-  const handleTestLlmKey = async () => {
-    if (!llmKeyInput.trim()) {
-      errorSnackbar(`Please enter an API Key for ${llmProvider}`, "Validation Error");
-      return;
-    }
-    setIsTestingLlmKey(true);
-    setLlmKeyTestResult(null);
-    try {
-      const res = await apiTestKey(llmProvider, llmKeyInput.trim());
-      setLlmKeyTestResult(res);
-      if (res.valid) {
-        success(`${llmProvider} API key verified successfully! (${res.latencyMs || 0}ms)`, "Provider Key Valid");
-      } else {
-        errorSnackbar(res.message || "Provider key verification failed", "Invalid Provider Key");
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to communicate with LLM validation service";
-      errorSnackbar(msg, "Verification Failed");
-      setLlmKeyTestResult({
-        valid: false,
-        provider: llmProvider,
-        message: msg,
-      });
-    } finally {
-      setIsTestingLlmKey(false);
-    }
+  const handleSignOut = () => {
+    logout();
+    navigate("/login", { replace: true });
   };
 
   const handleSavePreferences = () => {
-    success(`Preferences saved: Temperature ${temperature}, Default Provider ${defaultProvider}`, "Settings Saved");
+    success("Default extraction preferences saved locally", "Settings Saved");
   };
 
   const handleThemeToggle = () => {
@@ -266,7 +211,7 @@ export function SettingsPage() {
       </div>
 
       {/* Horizontal Segmented Tabs Navigation */}
-      <div className="p-1 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800/80">
+      <div className="p-1 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800/80">
         {SETTINGS_TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
@@ -317,254 +262,86 @@ export function SettingsPage() {
       {/* Tab 1: Security & API Credentials */}
       {activeSubTab === "security" && (
         <div className="space-y-4 animate-in fade-in duration-200">
-          {/* Card 1: Backend API Key Authentication */}
+          {/* Current session — key entry only happens on /login now; this is
+              read-only identity + sign-out, so there's exactly one place to
+              type a key in instead of two independent, easily-desynced ones. */}
           <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                  <Link2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Backend API Key Authentication
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Requests sent to the Spring Boot extraction backend authenticate via the{" "}
-                    <code className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-mono text-[11px]">
-                      {API_CONFIG.API_KEY_HEADER}
-                    </code>{" "}
-                    header.
-                  </p>
-                </div>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200/60 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                <ShieldCheck className="w-4 h-4" />
               </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Current Session</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Requests authenticate via the{" "}
+                  <code className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-mono text-[11px]">
+                    {API_CONFIG.API_KEY_HEADER}
+                  </code>{" "}
+                  header, resolved from the key you signed in with. To switch keys, sign out and sign back in.
+                </p>
+              </div>
+            </div>
 
+            {apiKeyIdentity ? (
+              <div className="rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 p-4 space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-[11px]">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-sans">Label</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{apiKeyIdentity.label}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-sans">Tenant</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{apiKeyIdentity.tenantId}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-sans">Roles</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100">
+                      {apiKeyIdentity.roles.join(", ")}
+                    </span>
+                  </div>
+                </div>
+                {adminRole && (
+                  <div className="flex items-center gap-2 text-[11px] text-purple-700 dark:text-purple-300 pt-1 border-t border-slate-200/60 dark:border-slate-800">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>
+                      Admin Console unlocked — <strong>{adminRole}</strong>
+                      {adminRole === "TENANT_ADMIN" && adminScopeTenantId
+                        ? ` for tenant "${adminScopeTenantId}"`
+                        : ""}
+                      {adminKeyLabel ? ` ("${adminKeyLabel}")` : ""}
+                    </span>
+                    <button
+                      onClick={() => navigate("/admin/tenants")}
+                      className="ml-auto font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      Open Admin Console →
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Verifying session...
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
               <button
                 type="button"
-                onClick={() => window.open("/swagger-ui.html", "_blank")}
-                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto shrink-0"
+                onClick={() => window.open("/docs", "_blank")}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
               >
                 <BookOpen className="w-3.5 h-3.5 text-slate-500" />
                 <span>View Documentation</span>
               </button>
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                Active Tenant API Key
-              </label>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showTenantKey ? "text" : "password"}
-                    value={keyInput}
-                    onChange={(e) => setKeyInput(e.target.value)}
-                    placeholder="e.g. local-test-key-glencore-2026"
-                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-slate-50/60 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowTenantKey(!showTenantKey)}
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded"
-                    title={showTenantKey ? "Hide key" : "Show key"}
-                  >
-                    {showTenantKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-
-                <button
-                  onClick={handleTestKey}
-                  disabled={isTestingKey}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs shrink-0"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingKey ? "animate-spin text-blue-500" : ""}`} />
-                  <span>{isTestingKey ? "Testing..." : "Test Key"}</span>
-                </button>
-
-                <button
-                  onClick={handleSaveKey}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-colors shrink-0"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Save Key</span>
-                </button>
-
-                <button
-                  onClick={handleResetKey}
-                  title="Reset to local default development key"
-                  className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Key Validation Result Box */}
-              {keyTestResult && (
-                <div
-                  className={`p-4 rounded-xl border text-xs space-y-2 animate-in fade-in duration-200 ${
-                    keyTestResult.valid
-                      ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200"
-                      : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-bold">
-                    {keyTestResult.valid ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                    )}
-                    <span>{keyTestResult.valid ? "API Key Authorized" : "Authentication Rejected"}</span>
-                  </div>
-
-                  {keyTestResult.valid && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px]">
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Tenant</span>
-                        <span className="font-bold">{keyTestResult.tenantId || activeTenantId || "—"}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Client Name</span>
-                        <span className="font-bold">{keyTestResult.clientName || "—"}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Status</span>
-                        <span className="text-emerald-600 font-bold">ACTIVE</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block text-[10px] uppercase">Allowed Roles</span>
-                        <span className="font-bold">{keyTestResult.roles?.length ? keyTestResult.roles.join(", ") : "—"}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {!keyTestResult.valid && (
-                    <p className="text-[11px] text-rose-700 dark:text-rose-300">
-                      {keyTestResult.message || "The provided API Key was rejected by the backend security filter."}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Card 2: LLM Provider Key Verification (Direct Integration) */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200/60 dark:border-purple-800/60 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  LLM Provider Key Verification (Direct Integration)
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Verify provider keys directly against upstream AI endpoints (Google Gemini, Anthropic Claude, OpenAI) via{" "}
-                  <code className="px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-mono text-[11px]">
-                    POST /api/v1/keys/test
-                  </code>.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end pt-1">
-              <div className="md:col-span-4 space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Select Provider
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-3 pointer-events-none flex items-center">
-                    {llmProvider === "GEMINI" ? (
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z" />
-                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.26 21.36 7.33 24 12 24z" />
-                        <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.13z" />
-                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
-                      </svg>
-                    ) : (
-                      <Cpu className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    )}
-                  </div>
-                  <select
-                    value={llmProvider}
-                    onChange={(e) => setLlmProvider(e.target.value)}
-                    className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer shadow-2xs appearance-none"
-                  >
-                    <option value="GEMINI">Google Gemini</option>
-                    <option value="CLAUDE">Anthropic Claude</option>
-                    <option value="OPENAI">OpenAI GPT</option>
-                    <option value="OLLAMA">Ollama (Local Air-Gapped)</option>
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="md:col-span-5 space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Provider API Key
-                </label>
-                <div className="relative">
-                  <input
-                    type={showLlmKey ? "text" : "password"}
-                    value={llmKeyInput}
-                    onChange={(e) => setLlmKeyInput(e.target.value)}
-                    placeholder="Enter API key to test connectivity..."
-                    className="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-2xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowLlmKey(!showLlmKey)}
-                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded"
-                    title={showLlmKey ? "Hide key" : "Show key"}
-                  >
-                    {showLlmKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="md:col-span-3">
-                <button
-                  onClick={handleTestLlmKey}
-                  disabled={isTestingLlmKey}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#8A3FFC] hover:bg-[#7828E8] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-colors"
-                >
-                  <Sparkles className={`w-3.5 h-3.5 ${isTestingLlmKey ? "animate-spin" : ""}`} />
-                  <span>{isTestingLlmKey ? "Validating..." : "Test LLM Key"}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* LLM Key Test Result */}
-            {llmKeyTestResult && (
-              <div
-                className={`p-4 rounded-xl border text-xs space-y-2 animate-in fade-in duration-200 ${
-                  llmKeyTestResult.valid
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200"
-                    : "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200"
-                }`}
+              <button
+                onClick={handleSignOut}
+                className="px-4 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 dark:text-slate-300 text-xs font-semibold cursor-pointer shrink-0 transition-colors"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold">
-                    {llmKeyTestResult.valid ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                    )}
-                    <span>
-                      {llmKeyTestResult.valid
-                        ? `${llmKeyTestResult.provider} Key Verified & Operational`
-                        : `${llmKeyTestResult.provider} Key Invalid or Rejected`}
-                    </span>
-                  </div>
-                  {llmKeyTestResult.latencyMs !== undefined && (
-                    <span className="font-mono text-[11px] font-bold text-slate-500">
-                      Latency: {llmKeyTestResult.latencyMs}ms
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px]">
-                  {llmKeyTestResult.message}
-                </p>
-              </div>
-            )}
+                Sign out
+              </button>
+            </div>
           </div>
 
           {/* Card 3: Egress Data Masking & Tenant Privacy Engine */}
@@ -647,6 +424,9 @@ export function SettingsPage() {
         </div>
       )}
 
+      {/* LLM providers, keys and models (stored per tenant, encrypted) */}
+      {activeSubTab === "llm" && <LlmProvidersPanel />}
+
       {/* Tab 2: Outbound Email & Tenant Notification Settings */}
       {activeSubTab === "email" && <TenantEmailSettingsPanel />}
 
@@ -678,23 +458,6 @@ export function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
-                  Default LLM Provider
-                </label>
-                <select
-                  value={defaultProvider}
-                  onChange={(e) => setDefaultProvider(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
-                >
-                  {API_CONFIG.PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.defaultModel})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
                   Default Output Language
                 </label>
                 <select
@@ -709,27 +472,12 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
-                Extraction Temperature (Sampling Precision)
-              </label>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Lower temperature (0.0 - 0.2) ensures strict deterministic adherence to statutory text.
-              </p>
-              <input
-                type="range"
-                min="0.0"
-                max="1.0"
-                step="0.05"
-                value={temperature}
-                onChange={(e) => setTemperature(e.target.value)}
-                className="w-full accent-blue-600 cursor-pointer"
-              />
-              <div className="flex justify-between font-mono text-xs font-bold text-slate-700 dark:text-slate-300">
-                <span>0.0 (Strict Legal)</span>
-                <span className="text-blue-600 dark:text-blue-400">{temperature}</span>
-                <span>1.0 (Creative)</span>
-              </div>
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex items-start gap-2">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                LLM providers, API keys and models are managed on the LLM Providers tab; users pick one
+                per extraction on the upload form. There's no per-request temperature or sampling control.
+              </span>
             </div>
 
             <div className="pt-1">
@@ -847,7 +595,7 @@ export function SettingsPage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                   <Server className="w-4 h-4 text-blue-500" />
-                  Spring Boot Backend
+                  FastAPI Backend
                 </span>
                 <span
                   className={`w-2.5 h-2.5 rounded-full ${
@@ -885,8 +633,8 @@ export function SettingsPage() {
                 </span>
               </div>
               <div className="flex items-baseline justify-between text-[11px] text-slate-400">
-                <span>Database</span>
-                <span className="font-mono">document_extraction</span>
+                <span>Verified via</span>
+                <span className="font-mono">GET /health (live SELECT 1)</span>
               </div>
             </div>
 
@@ -971,7 +719,7 @@ export function SettingsPage() {
                           {job.originalFilename || job.jobId}
                         </td>
                         <td className="py-3 text-slate-600 dark:text-slate-300">
-                          {job.requestedProvider || "GEMINI"}
+                          {job.requestedProvider || "—"}
                         </td>
                         <td className="py-3 text-center text-slate-500">
                           {job.completedAt && job.createdAt
