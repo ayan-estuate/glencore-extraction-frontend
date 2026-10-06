@@ -50,7 +50,7 @@ export function Sidebar({ activeTab, setActiveTab, isMobileOpen = false, onClose
   const currentTab: NavTab = React.useMemo(() => {
     if (activeTab) return activeTab;
     const path = location.pathname.toLowerCase();
-    if (path.startsWith("/upload")) return "upload";
+    if (path.startsWith("/upload") || path.startsWith("/jobs")) return "upload";
     if (path.startsWith("/library")) return "library";
     if (path.startsWith("/obligations")) return "obligations";
     if (path.startsWith("/analytics") || path.startsWith("/reports")) return "analytics";

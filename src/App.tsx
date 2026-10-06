@@ -4,6 +4,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UploadPage } from "./pages/UploadPage";
+import { JobPage } from "./pages/JobPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { DocumentDetailPage } from "./pages/DocumentDetailPage";
 import { ObligationsPage } from "./pages/ObligationsPage";
@@ -80,6 +81,7 @@ export function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/upload" element={<UploadPage />} />
+          <Route path="/jobs/:jobId" element={<JobPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/library/:id" element={<DocumentDetailPage />} />
           <Route path="/obligations" element={<ObligationsPage />} />

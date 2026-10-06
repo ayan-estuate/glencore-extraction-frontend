@@ -28,6 +28,8 @@ export interface UploadFormProps {
   onExtract: () => void;
   isExtracting: boolean;
   disabled: boolean;
+  /** How many files are staged, to label the button. */
+  fileCount?: number;
 }
 
 const SCHEMA_PRESETS = [
@@ -117,6 +119,7 @@ export function UploadForm({
   setOptions,
   onExtract,
   isExtracting,
+  fileCount = 1,
   disabled,
 }: UploadFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -376,12 +379,12 @@ export function UploadForm({
         {isExtracting ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Extracting Obligations & Data...</span>
+            <span>Uploading...</span>
           </>
         ) : (
           <>
             <Sparkles className="w-4 h-4" />
-            <span>Extract Obligations & Data</span>
+            <span>{fileCount > 1 ? `Extract ${fileCount} documents` : "Extract Obligations & Data"}</span>
             <ArrowRight className="w-4 h-4 ml-1" />
           </>
         )}

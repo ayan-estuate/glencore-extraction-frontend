@@ -32,10 +32,11 @@ function failureFor(progress: JobProgress): ErrorResponse {
   };
 }
 
-/** Handles a job that just reached a final state: fetch its result, notify, settle it. */
-async function finalize(job: TrackedJob, progress: JobProgress): Promise<void> {
-  const tracker = useJobTrackerStore.getState();
-  const snack = useSnackbarStore.getState();
+/** The stored document and/or error for a job that reached a final state. */
+async function resolveOutcome(
+  job: Pick<TrackedJob, "jobId" | "fileName" | "fileSize">,
+  progress: JobProgress
+): Promise<{ document: StoredDocument | null; error: ErrorResponse | null }> {
   let document: StoredDocument | null = null;
   let error: ErrorResponse | null = null;
 
@@ -71,8 +72,15 @@ async function finalize(job: TrackedJob, progress: JobProgress): Promise<void> {
   } else {
     error = failureFor(progress);
   }
+  return { document, error };
+}
 
-  tracker.patch(job.jobId, { finished: true, document, error });
+/** Handles a job that just reached a final state: fetch its result, notify, settle it. */
+async function finalize(job: TrackedJob, progress: JobProgress): Promise<void> {
+  const snack = useSnackbarStore.getState();
+  const { document, error } = await resolveOutcome(job, progress);
+
+  useJobTrackerStore.getState().patch(job.jobId, { finished: true, document, error });
   useAppStore.getState().fetchJobs(true).catch(() => undefined);
 
   const name = job.fileName;
@@ -87,6 +95,46 @@ async function finalize(job: TrackedJob, progress: JobProgress): Promise<void> {
   } else {
     snack.error(`${name}: ${error?.message ?? progress.status}`, "Extraction Failed");
   }
+}
+
+/**
+ * Make a job known to this browser (e.g. its page was opened from a link, or storage was cleared):
+ * read its real state from the server and start tracking it. A job that already finished is settled
+ * immediately, without notifications. Resolves false if the server has no such job.
+ */
+export async function adoptJob(jobId: string): Promise<boolean> {
+  const tracker = useJobTrackerStore.getState();
+  if (tracker.jobs[jobId]) return true;
+  let progress: JobProgress;
+  try {
+    progress = await apiGetJobProgress(jobId);
+  } catch {
+    return false;
+  }
+  const app = useAppStore.getState();
+  if (!app.jobs.some((j) => j.jobId === jobId)) await app.fetchJobs(true).catch(() => undefined);
+  const summary = useAppStore.getState().jobs.find((j) => j.jobId === jobId);
+  const base = {
+    jobId,
+    fileName: summary?.originalFilename ?? `Job ${jobId.slice(0, 8)}`,
+    fileSize: summary?.sizeBytes ?? 0,
+  };
+  const terminal = isTerminal(progress.status);
+  const outcome = terminal ? await resolveOutcome(base, progress) : { document: null, error: null };
+  tracker.add({
+    ...base,
+    model: progress.model ?? undefined,
+    submittedAt: progress.createdAt,
+    status: progress.status,
+    progress,
+    // A snapshot of what the server says now. Earlier live log lines are only kept in the
+    // browser that started the job.
+    logs: diffProgress(null, progress),
+    finished: terminal,
+    error: outcome.error,
+    document: outcome.document,
+  });
+  return true;
 }
 
 async function pollJob(job: TrackedJob): Promise<void> {

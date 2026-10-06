@@ -36,6 +36,8 @@ interface JobTrackerState {
   patch: (jobId: string, patch: Partial<TrackedJob>) => void;
   appendLogs: (jobId: string, lines: LogEvent[]) => void;
   setActive: (jobId: string | null) => void;
+  /** Remove finished jobs from this browser's queue (the jobs themselves stay on the server). */
+  clearFinished: () => void;
 }
 
 const STORAGE_KEY = "doc_extract_tracked_jobs_v1";
@@ -133,6 +135,14 @@ export const useJobTrackerStore = create<JobTrackerState>((set, get) => {
     },
 
     setActive: (jobId) => commit({ activeJobId: jobId }),
+
+    clearFinished: () => {
+      const s = get();
+      const order = s.order.filter((id) => !s.jobs[id]?.finished);
+      const jobs: Record<string, TrackedJob> = {};
+      for (const id of order) jobs[id] = s.jobs[id];
+      commit({ jobs, order, activeJobId: s.activeJobId && jobs[s.activeJobId] ? s.activeJobId : null });
+    },
   };
 });
 
