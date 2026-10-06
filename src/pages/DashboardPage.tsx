@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { StatsCards } from "../components/dashboard/StatsCards";
 import { LiveExtractionPipelineCard } from "../components/dashboard/LiveExtractionPipelineCard";
 import { ObligationsByStatusCard } from "../components/dashboard/ObligationsByStatusCard";
@@ -35,6 +36,25 @@ export function DashboardPage({ onNavigateTab, onSelectDocument }: DashboardPage
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 pb-8">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+          <div className="text-xs text-slate-500 mb-1">Dashboard</div>
+          <h1 className="text-[28px] leading-tight font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+            Compliance Intelligence Dashboard
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            End-to-end visibility from documents to compliant action
+          </p>
+        </div>
+        <button
+          onClick={() => handleNavTab("upload")}
+          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-[#c8102e] hover:bg-[#a90d27] text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          Extract New Document
+        </button>
+      </div>
+
       {/* 1. Top 5 Summary Metrics Cards */}
       <StatsCards />
 

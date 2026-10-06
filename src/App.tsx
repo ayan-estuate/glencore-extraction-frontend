@@ -5,6 +5,9 @@ import { Header } from "./components/layout/Header";
 import { DashboardPage } from "./pages/DashboardPage";
 import { UploadPage } from "./pages/UploadPage";
 import { JobPage } from "./pages/JobPage";
+import { JobsPage } from "./pages/JobsPage";
+import { EntitiesPage } from "./pages/EntitiesPage";
+import { ReviewPage } from "./pages/ReviewPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { DocumentDetailPage } from "./pages/DocumentDetailPage";
 import { ObligationsPage } from "./pages/ObligationsPage";
@@ -42,22 +45,16 @@ function ProtectedLayout() {
   return (
     <RequireAuth>
       <JobTrackerRunner />
-      <div className="min-h-screen bg-[#f8fafc] dark:bg-[#070c18] text-slate-900 dark:text-slate-100 flex font-sans antialiased selection:bg-rose-500 selection:text-white">
-        {/* Sidebar (Desktop Sticky + Mobile Drawer) */}
-        <Sidebar
-          isMobileOpen={isMobileMenuOpen}
-          onCloseMobile={() => setIsMobileMenuOpen(false)}
-        />
+      <div className="min-h-screen bg-[#f8fafc] dark:bg-[#070c18] text-slate-900 dark:text-slate-100 flex flex-col font-sans antialiased selection:bg-rose-500 selection:text-white">
+        {/* Full-width top bar */}
+        <Header onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
 
-        {/* Main Right Content Section */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Header Bar */}
-          <Header
-            onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          />
+        <div className="flex flex-1 min-h-0">
+          {/* Sidebar (sticky on desktop, drawer on mobile), below the top bar */}
+          <Sidebar isMobileOpen={isMobileMenuOpen} onCloseMobile={() => setIsMobileMenuOpen(false)} />
 
           {/* Dynamic Main Body Page View */}
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+          <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
             <Outlet />
           </main>
         </div>
@@ -81,7 +78,10 @@ export function AppContent() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/upload" element={<UploadPage />} />
+          <Route path="/jobs" element={<JobsPage />} />
           <Route path="/jobs/:jobId" element={<JobPage />} />
+          <Route path="/entities" element={<EntitiesPage />} />
+          <Route path="/review" element={<ReviewPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/library/:id" element={<DocumentDetailPage />} />
           <Route path="/obligations" element={<ObligationsPage />} />
