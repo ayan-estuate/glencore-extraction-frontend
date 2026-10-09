@@ -28,9 +28,54 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Select } from "../ui/Select";
 
-const TYPE_LABEL: Record<LlmProviderType, string> = {
-  ANTHROPIC: "Anthropic (Claude)",
-  OPENAI_COMPATIBLE: "OpenAI-compatible (OpenAI, Gemini, Azure, Groq, vLLM, ...)",
+/** A ready-made provider choice: picking one fills in the type, label and base URL. */
+interface ProviderPreset {
+  id: string;
+  name: string;
+  providerType: LlmProviderType;
+  baseUrl: string;
+}
+
+const CUSTOM_PRESET_ID = "custom";
+
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  { id: "anthropic", name: "Anthropic (Claude)", providerType: "ANTHROPIC", baseUrl: "" },
+  { id: "openai", name: "OpenAI", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.openai.com/v1" },
+  {
+    id: "gemini",
+    name: "Google Gemini",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  },
+  { id: "groq", name: "Groq", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.groq.com/openai/v1" },
+  { id: "mistral", name: "Mistral AI", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.mistral.ai/v1" },
+  { id: "deepseek", name: "DeepSeek", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.deepseek.com/v1" },
+  { id: "xai", name: "xAI (Grok)", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.x.ai/v1" },
+  { id: "together", name: "Together AI", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.together.xyz/v1" },
+  {
+    id: "fireworks",
+    name: "Fireworks AI",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+  },
+  { id: "cerebras", name: "Cerebras", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://api.cerebras.ai/v1" },
+  { id: "openrouter", name: "OpenRouter", providerType: "OPENAI_COMPATIBLE", baseUrl: "https://openrouter.ai/api/v1" },
+  {
+    id: CUSTOM_PRESET_ID,
+    name: "Other OpenAI-compatible (Azure, vLLM, self-hosted, ...)",
+    providerType: "OPENAI_COMPATIBLE",
+    baseUrl: "",
+  },
+];
+
+const presetById = (id: string) => PROVIDER_PRESETS.find((p) => p.id === id);
+
+/** Work out which preset a saved provider matches, so editing shows the same choice it was added with. */
+const presetForProvider = (p: LlmProvider): string => {
+  if (p.providerType === "ANTHROPIC") return "anthropic";
+  const norm = (u: string) => u.trim().replace(/\/+$/, "").toLowerCase();
+  const match = PROVIDER_PRESETS.find((x) => x.baseUrl && p.baseUrl && norm(x.baseUrl) === norm(p.baseUrl));
+  return match?.id ?? CUSTOM_PRESET_ID;
 };
 
 /** A model chosen for this provider. Prices are normally looked up by the server. */
@@ -46,6 +91,7 @@ interface ChosenModel {
 
 interface Draft {
   editingId: string | null;
+  presetId: string;
   providerType: LlmProviderType;
   label: string;
   baseUrl: string;
@@ -55,9 +101,10 @@ interface Draft {
 
 const emptyDraft = (): Draft => ({
   editingId: null,
-  providerType: "ANTHROPIC",
-  label: "",
-  baseUrl: "",
+  presetId: "gemini",
+  providerType: "OPENAI_COMPATIBLE",
+  label: "Google Gemini",
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
   apiKey: "",
   chosen: [],
 });
@@ -156,6 +203,7 @@ export function LlmProvidersPanel() {
     setDiscovered(null);
     setDraft({
       editingId: p.id,
+      presetId: presetForProvider(p),
       providerType: p.providerType,
       label: p.label,
       baseUrl: p.baseUrl ?? "",
@@ -167,6 +215,28 @@ export function LlmProvidersPanel() {
         inputUsd: "",
         outputUsd: "",
       })),
+    });
+  };
+
+  const pickPreset = (presetId: string) => {
+    const preset = presetById(presetId);
+    if (!preset || !draft) return;
+    const previous = presetById(draft.presetId);
+    setDiscovered(null);
+    setDraft({
+      ...draft,
+      presetId,
+      providerType: preset.providerType,
+      baseUrl: preset.baseUrl,
+      // Keep a label the admin typed; replace one we filled in ourselves.
+      label:
+        !draft.label.trim() || draft.label === previous?.name
+          ? presetId === CUSTOM_PRESET_ID
+            ? ""
+            : preset.name
+          : draft.label,
+      // Models from another provider make no sense here.
+      chosen: [],
     });
   };
 
@@ -409,15 +479,12 @@ export function LlmProvidersPanel() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-              <span>Provider type</span>
+              <span>Provider</span>
               <Select
-                value={draft.providerType}
+                value={draft.presetId}
                 disabled={!!draft.editingId}
-                onChange={(e) => {
-                  setDiscovered(null);
-                  setDraft({ ...draft, providerType: e.target.value as LlmProviderType });
-                }}
-                options={(Object.keys(TYPE_LABEL) as LlmProviderType[]).map((t) => ({ value: t, label: TYPE_LABEL[t] }))}
+                onChange={(e) => pickPreset(e.target.value)}
+                options={PROVIDER_PRESETS.map((p) => ({ value: p.id, label: p.name }))}
                 className="w-full"
               />
             </label>
@@ -426,22 +493,22 @@ export function LlmProvidersPanel() {
               <Input
                 value={draft.label}
                 onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-                placeholder={draft.providerType === "ANTHROPIC" ? "Claude" : "Gemini"}
+                placeholder={draft.presetId === CUSTOM_PRESET_ID ? "My provider" : "Shown to users"}
               />
             </label>
             <label className="space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
               <span>
                 Base URL{" "}
-                {draft.providerType === "OPENAI_COMPATIBLE" ? "(required)" : "(optional, blank = Anthropic's API)"}
+                {draft.presetId === CUSTOM_PRESET_ID
+                  ? "(required)"
+                  : draft.providerType === "ANTHROPIC"
+                    ? "(optional, blank = Anthropic's API)"
+                    : "(filled in for you)"}
               </span>
               <Input
                 value={draft.baseUrl}
                 onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                placeholder={
-                  draft.providerType === "OPENAI_COMPATIBLE"
-                    ? "https://generativelanguage.googleapis.com/v1beta/openai/"
-                    : ""
-                }
+                placeholder={draft.presetId === CUSTOM_PRESET_ID ? "https://your-host/v1" : ""}
               />
             </label>
             <label className="space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
